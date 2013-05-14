@@ -6,7 +6,7 @@ import redis
 pairs = {}
 count = 0
 for l in file('oui.txt').readlines():
-    m = re.search('(\d{2})-(\d{2})-(\d{2}).*\(hex\)(.*)', l)
+    m = re.search('(\w{2})-(\w{2})-(\w{2}).*\(hex\)(.*)', l)
     if m:
         prefix = '%s:%s:%s' % (m.group(1), m.group(2), m.group(3))
         name = m.group(4).strip()

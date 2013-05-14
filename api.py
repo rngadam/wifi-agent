@@ -37,6 +37,9 @@ class WifiData():
         return self.r.set(self.last_key, time.time())
 
     def join(self, mac):
+        if self.r.sismember(self.active_key, mac):
+            # already seen
+            return 0
         m = self.r.pipeline()
         m.sadd(self.active_key, mac)
         m.hset(self.join_key, mac, time.time())
@@ -44,6 +47,9 @@ class WifiData():
         return m.execute()
 
     def left(self, mac):
+        if not self.r.sismember(self.active_key, mac):
+            # not joined...
+            return 0
         m = self.r.pipeline()
         m.srem(self.active_key, mac)
         m.hset(self.left_key, mac, time.time())
