@@ -6,6 +6,8 @@ deployment:
 # requirements
 
 apt-get install python-redis
+apt-get install python-pip
+sudo pip install bottle
 
 # Install
 
