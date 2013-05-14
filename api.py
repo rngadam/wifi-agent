@@ -80,7 +80,6 @@ class WifiData():
         for mac in self.r.smembers(self.active_key):
             joined = float(self.r.hget(self.join_key, mac))
             oui =  mac[0:8]
-            print oui
             macs[mac] = {
                 'oui': self.r.hget(self.oui_key, oui),
                 'joined': joined,
