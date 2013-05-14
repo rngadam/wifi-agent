@@ -62,6 +62,16 @@ class WifiData():
     def list(self):
         response.headers['Content-Type'] = 'text/json'
         macs = {}
+        last = self.r.get(self.last_key)
+        if last:
+            last = float(last)
+        else:
+            last = 0
+        agent = {
+            'last': last,
+            'delta': time.time() - last,
+            'total': self.r.hlen(self.count_key)
+        }
         for mac in self.r.smembers(self.active_key):
             joined = float(self.r.hget(self.join_key, mac))
             oui =  mac[0:8]
@@ -72,7 +82,11 @@ class WifiData():
                 'uptime': time.time() - joined,
                 'count': self.r.hget(self.count_key, mac)
             }
-        return json.dumps(macs)
+        result = {
+            "agent": agent,
+            "mac": macs
+        }
+        return json.dumps(result)
 
 
 @get('/ping')
