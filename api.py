@@ -5,6 +5,7 @@ from bottle import route, run, request, post, get, response, delete
 
 import redis
 import json
+import datetime
 
 SEP = '|'
 SYSTEM_NAME = 'wifi'
@@ -23,6 +24,9 @@ def client(config=None):
         return redis.Redis(host=redis_config['host'], port=int(redis_config['port']))
     return redis.Redis()
 
+def unix_to_iso8601(unix):
+    return datetime.datetime.fromtimestamp(unix).isoformat()
+
 class WifiData():
     def __init__(self, client):
         self.r = client
@@ -33,6 +37,7 @@ class WifiData():
         self.left_key = prefix('left')
         self.join_key = prefix('join')
         self.oui_key = 'oui'
+        self.started = time.time()
 
     def ping(self):
         m = self.r.pipeline()
@@ -73,9 +78,12 @@ class WifiData():
             last = 0
         agent = {
             'last': last,
+            'last_iso8601': unix_to_iso8601(last),
             'delta': time.time() - last,
             'total': self.r.hlen(self.count_key),
-            'ping': self.r.get(self.ping_key)
+            'ping': self.r.get(self.ping_key),
+            'started': self.started,
+            'started_iso8601': unix_to_iso8601(self.started)
         }
         for mac in self.r.smembers(self.active_key):
             joined = float(self.r.hget(self.join_key, mac))
@@ -83,6 +91,7 @@ class WifiData():
             macs[mac] = {
                 'oui': self.r.hget(self.oui_key, oui),
                 'joined': joined,
+                'joined_iso8601': unix_to_iso8601(joined),
                 'uptime': int(time.time() - joined),
                 'count': self.r.hget(self.count_key, mac)
             }
