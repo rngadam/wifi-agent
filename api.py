@@ -28,13 +28,17 @@ class WifiData():
         self.r = client
         self.active_key = prefix('active')
         self.count_key = prefix('count')
+        self.ping_key = prefix('ping')
         self.last_key = prefix('last')
         self.left_key = prefix('left')
         self.join_key = prefix('join')
         self.oui_key = 'oui'
 
     def ping(self):
-        return self.r.set(self.last_key, time.time())
+        m = self.r.pipeline()
+        m.set(self.last_key, time.time())
+        m.incr(self.ping_key)
+        return m.execute()
 
     def join(self, mac):
         if self.r.sismember(self.active_key, mac):
@@ -43,7 +47,7 @@ class WifiData():
         m = self.r.pipeline()
         m.sadd(self.active_key, mac)
         m.hset(self.join_key, mac, time.time())
-        m.hincrby(self.count_key, mac, 1)
+        m.incr(self.count_key)
         return m.execute()
 
     def left(self, mac):
@@ -70,7 +74,8 @@ class WifiData():
         agent = {
             'last': last,
             'delta': time.time() - last,
-            'total': self.r.hlen(self.count_key)
+            'total': self.r.hlen(self.count_key),
+            'ping': self.r.get(self.ping_key)
         }
         for mac in self.r.smembers(self.active_key):
             joined = float(self.r.hget(self.join_key, mac))
@@ -79,7 +84,7 @@ class WifiData():
             macs[mac] = {
                 'oui': self.r.hget(self.oui_key, oui),
                 'joined': joined,
-                'uptime': time.time() - joined,
+                'uptime': int(time.time() - joined),
                 'count': self.r.hget(self.count_key, mac)
             }
         result = {

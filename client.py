@@ -47,6 +47,10 @@ class Client():
         uri = '/MAC'
         return self._get(uri)
 
+    def ping(self):
+        uri = '/ping'
+        return self._get(uri)
+
 def join(args):
     return client.join(args.mac)
 
@@ -58,6 +62,9 @@ def list_macs(args):
 
 def count(args):
     return client.count()
+
+def ping(args):
+    return client.ping()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -86,6 +93,9 @@ if __name__ == '__main__':
 
     list_parser = subparsers.add_parser('list', help='list MAC')
     list_parser.set_defaults(func=list_macs)
+
+    ping_parser = subparsers.add_parser('ping', help='ping MAC')
+    ping_parser.set_defaults(func=ping)
 
     args = parser.parse_args()
 
