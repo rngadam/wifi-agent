@@ -52,7 +52,7 @@ class WifiData():
         m = self.r.pipeline()
         m.sadd(self.active_key, mac)
         m.hset(self.join_key, mac, time.time())
-        m.incr(self.count_key)
+        m.hincrby(self.count_key, mac, 1)
         return m.execute()
 
     def left(self, mac):
