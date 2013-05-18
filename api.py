@@ -1,14 +1,16 @@
 #!/usr/bin/env python
+import os
 import time
 
 from bottle import route, run, request, post, get, response, delete
 
-import redis
-import json
 import datetime
+import json
+import redis
 
 SEP = '|'
 SYSTEM_NAME = 'wifi'
+HOUR_LENGTH = len('2013-05-18T19')
 
 def join_args(*arg):
     return SEP.join(*arg)
@@ -24,10 +26,13 @@ def client(config=None):
         return redis.Redis(host=redis_config['host'], port=int(redis_config['port']))
     return redis.Redis()
 
+def get_file_content(filename):
+    path = os.path.join(os.path.split(__file__)[0], filename)
+    content = file(path).read()
+    return content
+
 def unix_to_iso8601(unix):
     return datetime.datetime.fromtimestamp(unix).isoformat()
-
-HOUR_LENGTH = len('2013-05-18T19')
 
 def hour(unix):
     return unix_to_iso8601(unix)[0:HOUR_LENGTH]
@@ -65,7 +70,7 @@ class WifiData():
         m.hincrby(self.mac_to_count_hash, mac, 1)
         if not self.r.sismember(self.excluded_mac_set, mac):
             m.hincrby(self.hour_set, hour(now), 1)
-        results = m.execute()
+        return m.execute()
 
     def left(self, mac):
         if not self.r.sismember(self.active_mac_set, mac):
@@ -78,11 +83,9 @@ class WifiData():
         return m.execute()
 
     def count(self):
-        response.headers['Content-Type'] = 'text/plain'
-        return '%s' % len(self._active())
+        return len(self._active())
 
     def agent(self):
-        response.headers['Content-Type'] = 'text/json'
         last = self._last()
         agent = {
             'last': last,
@@ -97,29 +100,25 @@ class WifiData():
         result = {
             "agent": agent
         }
-        return json.dumps(result)
+        return result
 
     def macs(self):
-        response.headers['Content-Type'] = 'text/json'
-
         active = self._active()
         macs = self._macs_info(active)
         result = {
             "mac": macs
         }
 
-        return json.dumps(result)
+        return result
 
     def excluded(self):
-        response.headers['Content-Type'] = 'text/json'
-
         excluded = self._excluded()
         excluded = self._macs_info(excluded)
         result = {
             "mac": excluded
         }
 
-        return json.dumps(result)
+        return result
 
     def _macs_info(self, macs_list):
         macs = {}
@@ -171,9 +170,23 @@ class WifiData():
 def ping():
     DATA.ping()
 
+
+OPEN_IMAGE = get_file_content('xcj_open_badge.gif')
+CLOSE_IMAGE = get_file_content('xcj_closed_badge.gif')
+
+@get('/status.gif')
+def status():
+    response.headers['Content-Type'] = 'image/gif'
+
+    if DATA.count():
+        return OPEN_IMAGE
+    else:
+        return CLOSE_IMAGE
+
 @get('/agent')
 def agent():
-    return DATA.agent()
+    response.headers['Content-Type'] = 'text/json'
+    return json.dumps(DATA.agent())
 
 @get('/MAC/<mac>')
 def join(mac):
@@ -181,15 +194,18 @@ def join(mac):
 
 @get('/MAC')
 def macs():
-    return DATA.macs()
+    response.headers['Content-Type'] = 'text/json'
+    return json.dumps(DATA.macs())
 
 @get('/MAC/count')
 def count():
-    return DATA.count()
+    response.headers['Content-Type'] = 'text/plain'
+    return  '%s' % DATA.count()
 
 @get('/MAC/excluded')
 def excluded():
-    return DATA.excluded()
+    response.headers['Content-Type'] = 'text/json'
+    return json.dumps(DATA.excluded())
 
 @delete('/MAC/<mac>')
 def left(mac):
