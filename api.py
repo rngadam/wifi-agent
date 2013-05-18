@@ -10,11 +10,11 @@ import datetime
 SEP = '|'
 SYSTEM_NAME = 'wifi'
 
-def join_mac_to_timestamp_hash(*arg):
+def join_args(*arg):
     return SEP.join(*arg)
 
 def prefix(*arg):
-    return join_mac_to_timestamp_hash([SYSTEM_NAME, SEP.join(list(arg))])
+    return join_args([SYSTEM_NAME, SEP.join(list(arg))])
 
 def client(config=None):
     #print dir(redis)
@@ -27,6 +27,11 @@ def client(config=None):
 def unix_to_iso8601(unix):
     return datetime.datetime.fromtimestamp(unix).isoformat()
 
+HOUR_LENGTH = len('2013-05-18T19')
+
+def hour(unix):
+    return unix_to_iso8601(unix)[0:HOUR_LENGTH]
+
 class WifiData():
     def __init__(self, client):
         self.r = client
@@ -37,6 +42,7 @@ class WifiData():
         self.left_mac_to_timestamp_hash = prefix('left')
         self.join_mac_to_timestamp_hash = prefix('join')
         self.excluded_mac_set = prefix('excluded')
+        self.hour_set = prefix('hour')
         self.oui_to_manufacturer_hash = 'oui'
         self.started = time.time()
 
@@ -50,11 +56,16 @@ class WifiData():
         if self.r.sismember(self.active_mac_set, mac):
             # already seen
             return 0
+
+        now = time.time()
+
         m = self.r.pipeline()
         m.sadd(self.active_mac_set, mac)
-        m.hset(self.join_mac_to_timestamp_hash, mac, time.time())
+        m.hset(self.join_mac_to_timestamp_hash, mac, now)
         m.hincrby(self.mac_to_count_hash, mac, 1)
-        return m.execute()
+        if not self.r.sismember(self.excluded_mac_set, mac):
+            m.hincrby(self.hour_set, hour(now), 1)
+        results = m.execute()
 
     def left(self, mac):
         if not self.r.sismember(self.active_mac_set, mac):
