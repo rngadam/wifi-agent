@@ -43,8 +43,16 @@ class Client():
         uri = '/MAC/count'
         return self._get(uri)
 
-    def list_macs(self):
+    def excluded(self):
+        uri = '/MAC/excluded'
+        return self._get(uri)
+
+    def macs(self):
         uri = '/MAC'
+        return self._get(uri)
+
+    def agent(self):
+        uri = '/agent'
         return self._get(uri)
 
     def ping(self):
@@ -58,13 +66,19 @@ def left(args):
     return client.left(args.mac)
 
 def list_macs(args):
-    return client.list_macs()
+    return client.macs()
+
+def agent(args):
+    return client.agent()
 
 def count(args):
     return client.count()
 
 def ping(args):
     return client.ping()
+
+def excluded_list_macs(args):
+    return client.excluded()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -93,6 +107,12 @@ if __name__ == '__main__':
 
     list_parser = subparsers.add_parser('list', help='list MAC')
     list_parser.set_defaults(func=list_macs)
+
+    excluded_list_parser = subparsers.add_parser('excluded', help='excluded MAC')
+    excluded_list_parser.set_defaults(func=excluded_list_macs)
+
+    agent_parser = subparsers.add_parser('agent', help='agent')
+    agent_parser.set_defaults(func=agent)
 
     ping_parser = subparsers.add_parser('ping', help='ping MAC')
     ping_parser.set_defaults(func=ping)
