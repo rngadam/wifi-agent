@@ -82,6 +82,14 @@ class WifiData():
         m.srem(self.excluded_mac_set, mac)
         return m.execute()
 
+    def purge(self, mac):
+        m = self.r.pipeline()
+        m.hdel(self.join_mac_to_timestamp_hash, mac)
+        m.hdel(self.mac_to_count_hash, mac)
+        m.srem(self.active_mac_set, mac)
+        m.srem(self.excluded_mac_set, mac)
+        return m.execute()
+
     def count(self):
         return len(self._active())
 
@@ -210,6 +218,10 @@ def excluded():
 @delete('/MAC/<mac>')
 def left(mac):
     DATA.left(mac)
+
+@delete('/MAC/purge/<mac>')
+def purge(mac):
+    DATA.purge(mac)
 
 if __name__ == '__main__':
     global DATA

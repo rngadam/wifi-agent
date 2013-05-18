@@ -39,6 +39,10 @@ class Client():
         uri = '/MAC/%s' % mac
         return self._delete(uri)
 
+    def purge(self, mac):
+        uri = '/MAC/purge/%s' % mac
+        return self._delete(uri)
+
     def count(self):
         uri = '/MAC/count'
         return self._get(uri)
@@ -64,6 +68,9 @@ def join(args):
 
 def left(args):
     return client.left(args.mac)
+
+def purge(args):
+    return client.purge(args.mac)
 
 def list_macs(args):
     return client.macs()
@@ -101,6 +108,10 @@ if __name__ == '__main__':
     left_parser = subparsers.add_parser('left', help='left MAC')
     left_parser.add_argument('mac', help='mac address')
     left_parser.set_defaults(func=left)
+
+    purge_parser = subparsers.add_parser('purge', help='purge MAC')
+    purge_parser.add_argument('mac', help='mac address')
+    purge_parser.set_defaults(func=purge)
 
     count_parser = subparsers.add_parser('count', help='count MAC')
     count_parser.set_defaults(func=count)
