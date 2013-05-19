@@ -34,6 +34,8 @@ def get_file_content(filename):
 def unix_to_iso8601(unix):
     if not isinstance(unix, float):
         return None
+    if unix == 0.0:
+        return None
     return datetime.datetime.fromtimestamp(unix).isoformat()
 
 def hour(unix):
