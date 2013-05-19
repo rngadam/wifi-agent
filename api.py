@@ -206,7 +206,7 @@ class WifiData():
         return self.r.smembers(self.excluded_mac_set)
 
     def _last(self):
-        last = safe_float(self.r.get(self.last_timestamp_key))
+        return safe_float(self.r.get(self.last_timestamp_key))
 
 
 
