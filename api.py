@@ -65,29 +65,39 @@ class WifiData():
         m.incr(self.ping_counter_key)
         return m.execute()
 
-    def join(self, mac):
+    def join(self, mac, interval=60*30):
         if self.r.sismember(self.active_mac_set, mac):
-            # already seen
-            return
+            return False
         now = time.time()
 
         m = self.r.pipeline()
         m.sadd(self.active_mac_set, mac)
-        m.hset(self.join_mac_to_timestamp_hash, mac, now)
+        # only change join timestamp if the MAC has been away long enough
+        if not self._is_recently_active(mac, now, interval):
+            m.hset(self.join_mac_to_timestamp_hash, mac, now)
         m.hincrby(self.mac_to_count_hash, mac, 1)
         if not self.r.sismember(self.excluded_mac_set, mac):
             m.hincrby(self.hour_set, hour(now), 1)
-        return m.execute()
+        m.execute()
+
+        return True
+
+    def _is_recently_active(self, mac, now, interval):
+        last_join = safe_float(self.r.hget(self.join_mac_to_timestamp_hash, mac))
+        if (now - last_join) > interval:
+            return False
+        return True
 
     def left(self, mac):
         if not self.r.sismember(self.active_mac_set, mac):
             # not joined...
-            return 0
+            return False
         m = self.r.pipeline()
         m.srem(self.active_mac_set, mac)
         m.hset(self.left_mac_to_timestamp_hash, mac, time.time())
         m.srem(self.excluded_mac_set, mac)
-        return m.execute()
+        m.execute()
+        return True
 
     def purge(self, mac):
         m = self.r.pipeline()
