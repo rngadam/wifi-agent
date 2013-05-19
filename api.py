@@ -162,7 +162,7 @@ class WifiData():
             'joined': float(results[0]),
             'count': int(results[1]),
             'oui': results[2],
-            'left': results[3]
+            'left': float(results[3])
         }
 
     def _active(self):
