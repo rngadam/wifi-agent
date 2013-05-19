@@ -139,6 +139,15 @@ class WifiData():
 
         return result
 
+    def query(self, start, end):
+        results = self.r.zrangebyscore(self.join_mac_by_timestamp_z, start, end)
+        macs = self._macs_info(results)
+        result = {
+            "mac": macs
+        }
+
+        return result
+
     def excluded(self):
         excluded = self._excluded()
         excluded = self._macs_info(excluded)
@@ -248,6 +257,11 @@ def left(mac):
 @delete('/MAC/purge/%s' % MAC_PATH)
 def purge(mac):
     DATA.purge(mac)
+
+@get('/MAC/<start:re:[\.\d]*>/<end:re:[\.\d]*>')
+def macs(start, end):
+    response.headers['Content-Type'] = 'text/json'
+    return json.dumps(DATA.query(start, end))
 
 if __name__ == '__main__':
     global DATA, OPEN_IMAGE, CLOSE_IMAGE

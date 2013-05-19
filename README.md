@@ -5,8 +5,7 @@ deployment:
 
 # requirements
 
-apt-get install python-redis
-apt-get install python-pip
+apt-get install python-redis python-pip python-dateutil
 sudo pip install bottle
 
 # Install

@@ -3,6 +3,9 @@ import urllib
 import json
 import httplib
 import argparse
+import dateutil.parser
+import datetime
+import time
 
 class Client():
 
@@ -63,8 +66,26 @@ class Client():
         uri = '/ping'
         return self._get(uri)
 
+    def query(self, start_timestamp, end_timestamp):
+        uri = '/MAC/%s/%s' % (start_timestamp, end_timestamp)
+        return self._get(uri)
+
+def from_timestamp_to_date(u):
+    return datetime.datetime.utcfromtimestamp(u)
+
+def from_date_to_timestamp(d):
+    return time.mktime(d.timetuple())
+
 def join(args):
     return client.join(args.mac)
+
+def query(args):
+    start_date = dateutil.parser.parse(args.start)
+    end_date = dateutil.parser.parse(args.end)
+    start_timestamp = from_date_to_timestamp(start_date)
+    end_timestamp = from_date_to_timestamp(end_date)
+    print 'from: %s (%s) to %s (%s)' % (start_date, start_timestamp, end_date, end_timestamp)
+    return client.query(start_timestamp, end_timestamp)
 
 def left(args):
     return client.left(args.mac)
@@ -104,6 +125,11 @@ if __name__ == '__main__':
     join_parser = subparsers.add_parser('join', help='join MAC')
     join_parser.add_argument('mac', help='mac address')
     join_parser.set_defaults(func=join)
+
+    query_parser = subparsers.add_parser('query', help='query MAC')
+    query_parser.add_argument('start', help='start timestamp')
+    query_parser.add_argument('end', help='end timestamp')
+    query_parser.set_defaults(func=query)
 
     left_parser = subparsers.add_parser('left', help='left MAC')
     left_parser.add_argument('mac', help='mac address')
