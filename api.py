@@ -32,6 +32,8 @@ def get_file_content(filename):
     return content
 
 def unix_to_iso8601(unix):
+    if not isinstance(unix, float):
+        return None
     return datetime.datetime.fromtimestamp(unix).isoformat()
 
 def hour(unix):
@@ -60,8 +62,7 @@ class WifiData():
     def join(self, mac):
         if self.r.sismember(self.active_mac_set, mac):
             # already seen
-            return 0
-
+            return
         now = time.time()
 
         m = self.r.pipeline()
@@ -141,6 +142,7 @@ class WifiData():
         uptime = int(time.time() - info['joined'])
         self._update_fixed(mac, uptime)
         info['joined_iso8601'] = unix_to_iso8601(info['joined'])
+        info['left_iso8601'] = unix_to_iso8601(info['left'])
         info['uptime'] = uptime
         return info
 
@@ -154,11 +156,13 @@ class WifiData():
         m.hget(self.join_mac_to_timestamp_hash, mac)
         m.hget(self.mac_to_count_hash, mac)
         m.hget(self.oui_to_manufacturer_hash, oui)
+        m.hget(self.left_mac_to_timestamp_hash, mac)
         results = m.execute()
         return {
             'joined': float(results[0]),
             'count': int(results[1]),
-            'oui': results[2]
+            'oui': results[2],
+            'left': results[3]
         }
 
     def _active(self):
@@ -191,12 +195,15 @@ def status():
     else:
         return CLOSE_IMAGE
 
+MAC_REGEXP = '\w{2}:(\w{2}):\w{2}:\w{2}:\w{2}:\w{2}'
+MAC_PATH = '<mac:re:%s>' % MAC_REGEXP
+
 @get('/agent')
 def agent():
     response.headers['Content-Type'] = 'text/json'
     return json.dumps(DATA.agent())
 
-@get('/MAC/<mac>')
+@get('/MAC/%s' % MAC_PATH)
 def join(mac):
     DATA.join(mac)
 
@@ -215,11 +222,11 @@ def excluded():
     response.headers['Content-Type'] = 'text/json'
     return json.dumps(DATA.excluded())
 
-@delete('/MAC/<mac>')
+@delete('/MAC/%s' % MAC_PATH)
 def left(mac):
     DATA.left(mac)
 
-@delete('/MAC/purge/<mac>')
+@delete('/MAC/purge/%s' % MAC_PATH)
 def purge(mac):
     DATA.purge(mac)
 
