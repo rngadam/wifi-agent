@@ -90,7 +90,7 @@ class WifiData():
         m.incr(self.ping_counter_key)
         return m.execute()
 
-    def join(self, mac, interval=60*30):
+    def join(self, mac, interval=60*60):
         if self.r.sismember(self.active_mac_set, mac):
             return False
         now = time.time()
