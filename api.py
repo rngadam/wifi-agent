@@ -54,8 +54,10 @@ class WifiData():
         self.mac_to_count_hash = prefix('count')
         self.ping_counter_key = prefix('ping')
         self.last_timestamp_key = prefix('last')
+
         self.left_mac_to_timestamp_hash = prefix('left')
         self.join_mac_to_timestamp_hash = prefix('join')
+
         self.excluded_mac_set = prefix('excluded')
         self.hour_set = prefix('hour')
         self.oui_to_manufacturer_hash = 'oui'
@@ -82,12 +84,6 @@ class WifiData():
             m.hincrby(self.hour_set, hour(now), 1)
         m.execute()
 
-        return True
-
-    def _is_recently_active(self, mac, now, interval):
-        last_join = safe_float(self.r.hget(self.join_mac_to_timestamp_hash, mac))
-        if (now - last_join) > interval:
-            return False
         return True
 
     def left(self, mac):
@@ -147,6 +143,12 @@ class WifiData():
 
         return result
 
+    def _is_recently_active(self, mac, now, interval):
+        last_join = safe_float(self.r.hget(self.join_mac_to_timestamp_hash, mac))
+        if (now - last_join) > interval:
+            return False
+        return True
+
     def _macs_info(self, macs_list):
         macs = {}
 
@@ -192,13 +194,14 @@ class WifiData():
     def _last(self):
         last = safe_float(self.r.get(self.last_timestamp_key))
 
+
+
+MAC_REGEXP = '\w{2}:(\w{2}):\w{2}:\w{2}:\w{2}:\w{2}'
+MAC_PATH = '<mac:re:%s>' % MAC_REGEXP
+
 @get('/ping')
 def ping():
     DATA.ping()
-
-
-OPEN_IMAGE = get_file_content('xcj_open_badge.gif')
-CLOSE_IMAGE = get_file_content('xcj_closed_badge.gif')
 
 @get('/status.gif')
 def status():
@@ -208,9 +211,6 @@ def status():
         return OPEN_IMAGE
     else:
         return CLOSE_IMAGE
-
-MAC_REGEXP = '\w{2}:(\w{2}):\w{2}:\w{2}:\w{2}:\w{2}'
-MAC_PATH = '<mac:re:%s>' % MAC_REGEXP
 
 @get('/agent')
 def agent():
@@ -245,7 +245,9 @@ def purge(mac):
     DATA.purge(mac)
 
 if __name__ == '__main__':
-    global DATA
+    global DATA, OPEN_IMAGE, CLOSE_IMAGE
+    OPEN_IMAGE = get_file_content('xcj_open_badge.gif')
+    CLOSE_IMAGE = get_file_content('xcj_closed_badge.gif')
     DATA = WifiData(client())
     print 'Starting API server'
     run(host='0.0.0.0', reloader=True, port=9000, debug=True)
