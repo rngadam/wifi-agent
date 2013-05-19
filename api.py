@@ -39,6 +39,12 @@ def unix_to_iso8601(unix):
 def hour(unix):
     return unix_to_iso8601(unix)[0:HOUR_LENGTH]
 
+def safe_float(s):
+        if s:
+            return float(s)
+        else:
+            return 0.0
+
 class WifiData():
     def __init__(self, client):
         self.r = client
@@ -162,7 +168,7 @@ class WifiData():
             'joined': float(results[0]),
             'count': int(results[1]),
             'oui': results[2],
-            'left': float(results[3])
+            'left': safe_float(results[3])
         }
 
     def _active(self):
@@ -172,11 +178,7 @@ class WifiData():
         return self.r.smembers(self.excluded_mac_set)
 
     def _last(self):
-        last = self.r.get(self.last_timestamp_key)
-        if last:
-            return float(last)
-        else:
-            return 0
+        last = safe_float(self.r.get(self.last_timestamp_key))
 
 @get('/ping')
 def ping():
