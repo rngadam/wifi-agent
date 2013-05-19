@@ -84,7 +84,7 @@ def query(args):
     end_date = dateutil.parser.parse(args.end)
     start_timestamp = from_date_to_timestamp(start_date)
     end_timestamp = from_date_to_timestamp(end_date)
-    print 'from: %s (%s) to %s (%s)' % (start_date, start_timestamp, end_date, end_timestamp)
+    #print 'from: %s (%s) to %s (%s)' % (start_date, start_timestamp, end_date, end_timestamp)
     return client.query(start_timestamp, end_timestamp)
 
 def left(args):

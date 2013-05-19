@@ -1,3 +1,4 @@
 router.passwd
 oui.txt
 mac.dat
+wifi-agent-env/*

@@ -98,7 +98,7 @@ class WifiData():
         m = self.r.pipeline()
         m.sadd(self.active_mac_set, mac)
         m.hincrby(self.mac_to_count_hash, mac, 1)
-        # only change join timestamp if the MAC has been away long enough
+        # only change last join timestamp if the MAC has been away long enough
         if not self._is_recently_active(mac, now, interval):
             m.zadd(self.join_mac_by_timestamp_z, mac, now)
         if not self.r.sismember(self.excluded_mac_set, mac):
@@ -158,7 +158,7 @@ class WifiData():
         return result
 
     def _is_recently_active(self, mac, now, interval):
-        last_join = safe_float(self.r.zscore(self.join_mac_by_timestamp_z, mac))
+        last_join = safe_float(self.r.zscore(self.left_mac_by_timestamp_z, mac))
         if (now - last_join) > interval:
             return False
         return True
