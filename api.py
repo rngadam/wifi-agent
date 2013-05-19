@@ -11,6 +11,7 @@ import redis
 SEP = '|'
 SYSTEM_NAME = 'wifi'
 HOUR_LENGTH = len('2013-05-18T19')
+DAY_LENGTH = len('2013-05-18')
 
 def join_args(*arg):
     return SEP.join(*arg)
@@ -41,6 +42,9 @@ def unix_to_iso8601(unix):
 def hour(unix):
     return unix_to_iso8601(unix)[0:HOUR_LENGTH]
 
+def day(unix):
+    return unix_to_iso8601(unix)[0:DAY_LENGTH]
+
 def safe_float(s):
         if s:
             return float(s)
@@ -55,58 +59,13 @@ class WifiData():
         self.ping_counter_key = prefix('ping')
         self.last_timestamp_key = prefix('last')
 
-        self.left_mac_to_timestamp_hash = prefix('left')
-        self.join_mac_to_timestamp_hash = prefix('join')
+        self.left_mac_by_timestamp_z = prefix('left-by-timestamp')
+        self.join_mac_by_timestamp_z = prefix('join-by-timestamp')
 
         self.excluded_mac_set = prefix('excluded')
         self.hour_set = prefix('hour')
         self.oui_to_manufacturer_hash = 'oui'
         self.started = time.time()
-
-    def ping(self):
-        m = self.r.pipeline()
-        m.set(self.last_timestamp_key, time.time())
-        m.incr(self.ping_counter_key)
-        return m.execute()
-
-    def join(self, mac, interval=60*30):
-        if self.r.sismember(self.active_mac_set, mac):
-            return False
-        now = time.time()
-
-        m = self.r.pipeline()
-        m.sadd(self.active_mac_set, mac)
-        # only change join timestamp if the MAC has been away long enough
-        if not self._is_recently_active(mac, now, interval):
-            m.hset(self.join_mac_to_timestamp_hash, mac, now)
-        m.hincrby(self.mac_to_count_hash, mac, 1)
-        if not self.r.sismember(self.excluded_mac_set, mac):
-            m.hincrby(self.hour_set, hour(now), 1)
-        m.execute()
-
-        return True
-
-    def left(self, mac):
-        if not self.r.sismember(self.active_mac_set, mac):
-            # not joined...
-            return False
-        m = self.r.pipeline()
-        m.srem(self.active_mac_set, mac)
-        m.hset(self.left_mac_to_timestamp_hash, mac, time.time())
-        m.srem(self.excluded_mac_set, mac)
-        m.execute()
-        return True
-
-    def purge(self, mac):
-        m = self.r.pipeline()
-        m.hdel(self.join_mac_to_timestamp_hash, mac)
-        m.hdel(self.mac_to_count_hash, mac)
-        m.srem(self.active_mac_set, mac)
-        m.srem(self.excluded_mac_set, mac)
-        return m.execute()
-
-    def count(self):
-        return len(self._active())
 
     def agent(self):
         last = self._last()
@@ -124,6 +83,52 @@ class WifiData():
             "agent": agent
         }
         return result
+
+    def ping(self):
+        m = self.r.pipeline()
+        m.set(self.last_timestamp_key, time.time())
+        m.incr(self.ping_counter_key)
+        return m.execute()
+
+    def join(self, mac, interval=60*30):
+        if self.r.sismember(self.active_mac_set, mac):
+            return False
+        now = time.time()
+
+        m = self.r.pipeline()
+        m.sadd(self.active_mac_set, mac)
+        m.hincrby(self.mac_to_count_hash, mac, 1)
+        # only change join timestamp if the MAC has been away long enough
+        if not self._is_recently_active(mac, now, interval):
+            m.zadd(self.join_mac_by_timestamp_z, mac, now)
+        if not self.r.sismember(self.excluded_mac_set, mac):
+            m.hincrby(self.hour_set, hour(now), 1)
+        m.execute()
+
+        return True
+
+    def left(self, mac):
+        if not self.r.sismember(self.active_mac_set, mac):
+            # not joined...
+            return False
+        m = self.r.pipeline()
+        m.srem(self.active_mac_set, mac)
+        m.zadd(self.left_mac_by_timestamp_z, mac, time.time())
+        m.srem(self.excluded_mac_set, mac)
+        m.execute()
+        return True
+
+    def purge(self, mac):
+        m = self.r.pipeline()
+        m.hdel(self.mac_to_count_hash, mac)
+        m.srem(self.active_mac_set, mac)
+        m.srem(self.excluded_mac_set, mac)
+        m.zrem(self.join_mac_by_timestamp_z, mac)
+        m.zrem(self.left_mac_by_timestamp_z, mac)
+        return m.execute()
+
+    def count(self):
+        return len(self._active())
 
     def macs(self):
         active = self._active()
@@ -144,7 +149,7 @@ class WifiData():
         return result
 
     def _is_recently_active(self, mac, now, interval):
-        last_join = safe_float(self.r.hget(self.join_mac_to_timestamp_hash, mac))
+        last_join = safe_float(self.r.zscore(self.join_mac_by_timestamp_z, mac))
         if (now - last_join) > interval:
             return False
         return True
@@ -173,10 +178,10 @@ class WifiData():
     def _fetch_mac(self, mac):
         oui =  mac[0:8]
         m = self.r.pipeline()
-        m.hget(self.join_mac_to_timestamp_hash, mac)
+        m.zscore(self.join_mac_by_timestamp_z, mac)
         m.hget(self.mac_to_count_hash, mac)
         m.hget(self.oui_to_manufacturer_hash, oui)
-        m.hget(self.left_mac_to_timestamp_hash, mac)
+        m.zscore(self.left_mac_by_timestamp_z, mac)
         results = m.execute()
         return {
             'joined': float(results[0]),
