@@ -122,10 +122,10 @@ if __name__ == '__main__':
     excluded_list_parser = subparsers.add_parser('excluded', help='excluded MAC')
     excluded_list_parser.set_defaults(func=excluded_list_macs)
 
-    agent_parser = subparsers.add_parser('agent', help='agent')
+    agent_parser = subparsers.add_parser('agent', help='agent information')
     agent_parser.set_defaults(func=agent)
 
-    ping_parser = subparsers.add_parser('ping', help='ping MAC')
+    ping_parser = subparsers.add_parser('ping', help='ping agent')
     ping_parser.set_defaults(func=ping)
 
     args = parser.parse_args()
