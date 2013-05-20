@@ -13,24 +13,31 @@ SYSTEM_NAME = 'wifi'
 HOUR_LENGTH = len('2013-05-18T19')
 DAY_LENGTH = len('2013-05-18')
 
+
 def join_args(*arg):
     return SEP.join(*arg)
 
+
 def prefix(*arg):
     return join_args([SYSTEM_NAME, SEP.join(list(arg))])
+
 
 def client(config=None):
     #print dir(redis)
     if config and 'redis' in config:
         redis_config = config['redis']
         print 'Using alternate Redis config %s' % (redis_config)
-        return redis.Redis(host=redis_config['host'], port=int(redis_config['port']))
+        return redis.Redis(
+            host=redis_config['host'],
+            port=int(redis_config['port']))
     return redis.Redis()
+
 
 def get_file_content(filename):
     path = os.path.join(os.path.split(__file__)[0], filename)
     content = file(path).read()
     return content
+
 
 def unix_to_iso8601(unix):
     if not isinstance(unix, float):
@@ -39,17 +46,21 @@ def unix_to_iso8601(unix):
         return None
     return datetime.datetime.fromtimestamp(unix).isoformat()
 
+
 def hour(unix):
     return unix_to_iso8601(unix)[0:HOUR_LENGTH]
 
+
 def day(unix):
     return unix_to_iso8601(unix)[0:DAY_LENGTH]
+
 
 def safe_float(s):
         if s:
             return float(s)
         else:
             return 0.0
+
 
 class WifiData():
     def __init__(self, client):
@@ -140,7 +151,9 @@ class WifiData():
         return result
 
     def query(self, start, end):
-        results = self.r.zrangebyscore(self.join_mac_by_timestamp_z, start, end)
+        results = self.r.zrangebyscore(
+            self.join_mac_by_timestamp_z,
+            start, end)
         macs = self._macs_info(results)
         result = {
             "mac": macs
@@ -158,7 +171,8 @@ class WifiData():
         return result
 
     def _is_recently_active(self, mac, now, interval):
-        last_join = safe_float(self.r.zscore(self.left_mac_by_timestamp_z, mac))
+        last_join = safe_float(self.r.zscore(
+            self.left_mac_by_timestamp_z, mac))
         if (now - last_join) > interval:
             return False
         return True
@@ -185,7 +199,7 @@ class WifiData():
             self.r.sadd(self.excluded_mac_set, mac)
 
     def _fetch_mac(self, mac):
-        oui =  mac[0:8]
+        oui = mac[0:8]
         m = self.r.pipeline()
         m.zscore(self.join_mac_by_timestamp_z, mac)
         m.hget(self.mac_to_count_hash, mac)
@@ -209,13 +223,14 @@ class WifiData():
         return safe_float(self.r.get(self.last_timestamp_key))
 
 
-
 MAC_REGEXP = '\w{2}:(\w{2}):\w{2}:\w{2}:\w{2}:\w{2}'
 MAC_PATH = '<mac:re:%s>' % MAC_REGEXP
+
 
 @get('/ping')
 def ping():
     DATA.ping()
+
 
 @get('/status.gif')
 def status():
@@ -226,42 +241,51 @@ def status():
     else:
         return CLOSE_IMAGE
 
+
 @get('/agent')
 def agent():
     response.headers['Content-Type'] = 'text/json'
     return json.dumps(DATA.agent())
 
+
 @get('/MAC/%s' % MAC_PATH)
 def join(mac):
     DATA.join(mac)
+
 
 @get('/MAC')
 def macs():
     response.headers['Content-Type'] = 'text/json'
     return json.dumps(DATA.macs())
 
+
 @get('/MAC/count')
 def count():
     response.headers['Content-Type'] = 'text/plain'
-    return  '%s' % DATA.count()
+    return '%s' % DATA.count()
+
 
 @get('/MAC/excluded')
 def excluded():
     response.headers['Content-Type'] = 'text/json'
     return json.dumps(DATA.excluded())
 
+
 @delete('/MAC/%s' % MAC_PATH)
 def left(mac):
     DATA.left(mac)
+
 
 @delete('/MAC/purge/%s' % MAC_PATH)
 def purge(mac):
     DATA.purge(mac)
 
+
 @get('/MAC/<start:re:[\.\d]*>/<end:re:[\.\d]*>')
 def macs(start, end):
     response.headers['Content-Type'] = 'text/json'
     return json.dumps(DATA.query(start, end))
+
 
 if __name__ == '__main__':
     global DATA, OPEN_IMAGE, CLOSE_IMAGE
