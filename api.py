@@ -315,13 +315,14 @@ def macs(start, end):
 
 @SCHED.interval_schedule(minutes=1, coalesce=True)
 def update_excluded():
-    print 'Refreshing update excluded %s' % DATA.update_excluded()
+    print 'Refreshing update excluded: %s' % DATA.update_excluded()
 
 @SCHED.interval_schedule(minutes=1, coalesce=True)
 def update_leases():
     content = file(LEASES_FILENAME).read()
     regexp = '(%s) (%s) (%s)' % (MAC_REGEXP, IP_REGEXP, HOSTNAME_REGEXP)
     results = re.findall(regexp, content)
+    print 'Updating leases: %s' % results
     for (mac, ip, hostname) in results:
         mac = mac.upper()
         DATA.add_ip(mac, ip)
@@ -347,6 +348,9 @@ if __name__ == '__main__':
     DATA = WifiData(client())
     SCHED.start()
     SCHED.print_jobs()
+
+    update_leases()
+    update_excluded()
 
     print 'Starting API server'
     run(host='0.0.0.0', reloader=True, port=9000, debug=True)
