@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import os
 import time
+import re
+import argparse
 
 from bottle import route, run, request, post, get, response, delete
 from apscheduler.scheduler import Scheduler
@@ -9,12 +11,11 @@ import datetime
 import json
 import redis
 
-SCHED = Scheduler()
 SEP = '|'
 SYSTEM_NAME = 'wifi'
 HOUR_LENGTH = len('2013-05-18T19')
 DAY_LENGTH = len('2013-05-18')
-
+SCHED = Scheduler()
 
 def join_args(*arg):
     return SEP.join(*arg)
@@ -69,6 +70,8 @@ class WifiData():
         self.r = client
         self.active_mac_set = prefix('active')
         self.mac_to_count_hash = prefix('count')
+        self.mac_to_ip_hash = prefix('ip')
+        self.mac_to_hostname_hash = prefix('hostname')
         self.ping_counter_key = prefix('ping')
         self.last_timestamp_key = prefix('last')
 
@@ -79,6 +82,12 @@ class WifiData():
         self.hour_set = prefix('hour')
         self.oui_to_manufacturer_hash = 'oui'
         self.started = time.time()
+
+    def add_ip(self, mac, ip):
+        self.r.hset(self.mac_to_ip_hash, mac, ip)
+
+    def add_hostname(self, mac, hostname):
+        self.r.hset(self.mac_to_hostname_hash, mac, hostname)
 
     def agent(self):
         last = self._last()
@@ -104,6 +113,7 @@ class WifiData():
         return m.execute()
 
     def join(self, mac, interval=60*60):
+        mac = mac.upper()
         if self.r.sismember(self.active_mac_set, mac):
             return False
         now = time.time()
@@ -121,6 +131,7 @@ class WifiData():
         return True
 
     def left(self, mac):
+        mac = mac.upper()
         if not self.r.sismember(self.active_mac_set, mac):
             # not joined...
             return False
@@ -132,12 +143,15 @@ class WifiData():
         return True
 
     def purge(self, mac):
+        mac = mac.upper()
         m = self.r.pipeline()
         m.hdel(self.mac_to_count_hash, mac)
         m.srem(self.active_mac_set, mac)
         m.srem(self.excluded_mac_set, mac)
         m.zrem(self.join_mac_by_timestamp_z, mac)
         m.zrem(self.left_mac_by_timestamp_z, mac)
+        m.hdel(self.mac_to_ip_hash, mac)
+        m.hdel(self.mac_to_hostname_hash, mac)
         return m.execute()
 
     def count(self):
@@ -210,12 +224,16 @@ class WifiData():
         m.hget(self.mac_to_count_hash, mac)
         m.hget(self.oui_to_manufacturer_hash, oui)
         m.zscore(self.left_mac_by_timestamp_z, mac)
+        m.hget(self.mac_to_ip_hash, mac)
+        m.hget(self.mac_to_hostname_hash, mac)
         results = m.execute()
         return {
             'joined': float(results[0]),
             'count': int(results[1]),
             'oui': results[2],
-            'left': safe_float(results[3])
+            'left': safe_float(results[3]),
+            'ip': results[4],
+            'hostname': results[5],
         }
 
     def _active(self):
@@ -228,7 +246,10 @@ class WifiData():
         return safe_float(self.r.get(self.last_timestamp_key))
 
 
-MAC_REGEXP = '\w{2}:(\w{2}):\w{2}:\w{2}:\w{2}:\w{2}'
+MAC_REGEXP = '\w{2}:\w{2}:\w{2}:\w{2}:\w{2}:\w{2}'
+IP_REGEXP = '\d+\.\d+\.\d+\.\d+'
+HOSTNAME_REGEXP = '[\w\*-]+'
+
 MAC_PATH = '<mac:re:%s>' % MAC_REGEXP
 
 
@@ -292,19 +313,40 @@ def macs(start, end):
     return json.dumps(DATA.query(start, end))
 
 
-@SCHED.interval_schedule(minutes=1)
+@SCHED.interval_schedule(minutes=1, coalesce=True)
 def update_excluded():
     print 'Refreshing update excluded %s' % DATA.update_excluded()
 
+@SCHED.interval_schedule(minutes=1, coalesce=True)
+def update_leases():
+    content = file(LEASES_FILENAME).read()
+    regexp = '(%s) (%s) (%s)' % (MAC_REGEXP, IP_REGEXP, HOSTNAME_REGEXP)
+    results = re.findall(regexp, content)
+    for (mac, ip, hostname) in results:
+        mac = mac.upper()
+        DATA.add_ip(mac, ip)
+        DATA.add_hostname(mac, hostname)
 
 if __name__ == '__main__':
-    global DATA, OPEN_IMAGE, CLOSE_IMAGE
+    parser = argparse.ArgumentParser(description='Capture wifi data')
+    parser.add_argument(
+        '--leases',
+        dest='leases',
+        default='/home/router/dnsmasq.leases')
+    args = parser.parse_args()
 
-    SCHED.start()
+    if not os.path.isfile(args.leases):
+        print 'Not a file: %s' % args.leases
+        exit(1)
+
+    global DATA, OPEN_IMAGE, CLOSE_IMAGE, LEASES_FILENAME
+    LEASES_FILENAME = args.leases
     OPEN_IMAGE = get_file_content('xcj_open_badge.gif')
     CLOSE_IMAGE = get_file_content('xcj_closed_badge.gif')
+
     DATA = WifiData(client())
-    print 'update excluded'
-    print DATA.update_excluded()
+    SCHED.start()
+    SCHED.print_jobs()
+
     print 'Starting API server'
     run(host='0.0.0.0', reloader=True, port=9000, debug=True)
