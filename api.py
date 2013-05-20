@@ -3,11 +3,13 @@ import os
 import time
 
 from bottle import route, run, request, post, get, response, delete
+from apscheduler.scheduler import Scheduler
 
 import datetime
 import json
 import redis
 
+SCHED = Scheduler()
 SEP = '|'
 SYSTEM_NAME = 'wifi'
 HOUR_LENGTH = len('2013-05-18T19')
@@ -170,6 +172,14 @@ class WifiData():
 
         return result
 
+    def update_excluded(self, max_uptime=60*60*8):
+        excluded = []
+        for (mac_id, mac_info) in self.macs()['mac'].iteritems():
+            if mac_info['uptime'] > max_uptime:
+                self.r.sadd(self.excluded_mac_set, mac_id)
+                excluded.append(mac_id)
+        return excluded
+
     def _is_recently_active(self, mac, now, interval):
         last_join = safe_float(self.r.zscore(
             self.left_mac_by_timestamp_z, mac))
@@ -188,15 +198,10 @@ class WifiData():
     def _mac_info(self, mac):
         info = self._fetch_mac(mac)
         uptime = int(time.time() - info['joined'])
-        self._update_fixed(mac, uptime)
         info['joined_iso8601'] = unix_to_iso8601(info['joined'])
         info['left_iso8601'] = unix_to_iso8601(info['left'])
         info['uptime'] = uptime
         return info
-
-    def _update_fixed(self, mac, uptime, max_uptime=60*60*8):
-        if uptime > max_uptime:
-            self.r.sadd(self.excluded_mac_set, mac)
 
     def _fetch_mac(self, mac):
         oui = mac[0:8]
@@ -287,10 +292,19 @@ def macs(start, end):
     return json.dumps(DATA.query(start, end))
 
 
+@SCHED.interval_schedule(minutes=1)
+def update_excluded():
+    print 'Refreshing update excluded %s' % DATA.update_excluded()
+
+
 if __name__ == '__main__':
     global DATA, OPEN_IMAGE, CLOSE_IMAGE
+
+    SCHED.start()
     OPEN_IMAGE = get_file_content('xcj_open_badge.gif')
     CLOSE_IMAGE = get_file_content('xcj_closed_badge.gif')
     DATA = WifiData(client())
+    print 'update excluded'
+    print DATA.update_excluded()
     print 'Starting API server'
     run(host='0.0.0.0', reloader=True, port=9000, debug=True)
