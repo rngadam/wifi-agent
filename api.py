@@ -180,7 +180,7 @@ class WifiData():
         # only change last join timestamp if the MAC has been away long enough
         if not self._is_recently_active(mac, now, interval):
             m.zadd(self.join_mac_by_timestamp_z, mac, now)
-            m.publish(prefix('join'), mac)
+            self.r.publish(prefix('join'), mac)
         if not self.r.sismember(self.excluded_mac_set, mac):
             m.hincrby(self.hour_set, hour(now), 1)
         m.execute()
@@ -196,8 +196,8 @@ class WifiData():
         m.srem(self.active_mac_set, mac)
         m.zadd(self.left_mac_by_timestamp_z, mac, time.time())
         m.srem(self.excluded_mac_set, mac)
-        m.publish(prefix('left'), mac)
         m.execute()
+        self.r.publish(prefix('left'), mac)
         return True
 
     def purge(self, mac):
