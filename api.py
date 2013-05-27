@@ -371,7 +371,7 @@ def macs(start, end):
 @SCHED.interval_schedule(minutes=1, coalesce=True)
 def update_excluded():
     excluded = DATA.update_excluded()
-    if excluded:
+    if len(excluded):
         logger.info('Refreshing update excluded: %s' % excluded)
 
 
