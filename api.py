@@ -52,6 +52,7 @@ HOUR_LENGTH = len('2013-05-18T19')
 DAY_LENGTH = len('2013-05-18')
 SCHED = Scheduler()
 
+
 def join_args(*arg):
     return SEP.join(*arg)
 
@@ -179,6 +180,7 @@ class WifiData():
         # only change last join timestamp if the MAC has been away long enough
         if not self._is_recently_active(mac, now, interval):
             m.zadd(self.join_mac_by_timestamp_z, mac, now)
+            m.publish(prefix('join'), mac)
         if not self.r.sismember(self.excluded_mac_set, mac):
             m.hincrby(self.hour_set, hour(now), 1)
         m.execute()
@@ -194,6 +196,7 @@ class WifiData():
         m.srem(self.active_mac_set, mac)
         m.zadd(self.left_mac_by_timestamp_z, mac, time.time())
         m.srem(self.excluded_mac_set, mac)
+        m.publish(prefix('left'), mac)
         m.execute()
         return True
 
@@ -246,6 +249,7 @@ class WifiData():
         for (mac_id, mac_info) in self.macs()['mac'].iteritems():
             if mac_info['uptime'] > max_uptime:
                 self.r.sadd(self.excluded_mac_set, mac_id)
+                self.r.publish(prefix('exclude'), mac_id)
                 excluded.append(mac_id)
         return excluded
 
