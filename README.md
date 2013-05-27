@@ -1,6 +1,5 @@
 deployment:
 
-* agent: xinchejian@burty.xinchejian.com
 * server: xinchejian@vps2.xinchejian.com
 
 # requirements
@@ -8,26 +7,38 @@ deployment:
 apt-get install python-redis python-pip python-dateutil
 sudo pip install bottle
 
-# Install
+# Server Install
 
 ```
 wget --no-check-certificate https://standards.ieee.org/develop/regauth/oui/oui.txt
 ./oui-loader.py
 ```
-
-# agent
-
-* edit router.passwd
-*
-```
-./agent.sh
-```
-
-# api
+Launch the API:
 
 ```
 ./api.py
 ```
 
-# testing
+# Router install
+
+copy the router@vps2.xinchejian.com:.ssh/id_rsa to the router /tmp/root/.ssh directory
+
+```
+dropbearconvert openssh dropbear id_rsa id_rsa.db
+ssh -i ~/.ssh/id_rsa.db router@vps2.xinchejian.com
+```
+
+copy router.sh to the /tmp/root/router.sh
+
+Create crontab entry (/tmp/cron.d/router):
+
+```
+*      *       *       *       *       root /tmp/root/router.sh
+```
+
+Restart cron:
+
+```
+stopservice cron && startservice cron
+```
 

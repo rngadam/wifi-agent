@@ -68,6 +68,7 @@ def safe_float(s):
 class WifiData():
     def __init__(self, client):
         self.r = client
+        self.assoclist_mac_set = prefix('assoclist')
         self.active_mac_set = prefix('active')
         self.mac_to_count_hash = prefix('count')
         self.mac_to_ip_hash = prefix('ip')
@@ -111,6 +112,27 @@ class WifiData():
         m.set(self.last_timestamp_key, time.time())
         m.incr(self.ping_counter_key)
         return m.execute()
+
+    def bulk(self, macs):
+        m = self.r.pipeline()
+        m.delete(self.assoclist_mac_set)
+        m.sadd(self.assoclist_mac_set, *macs)
+        m.execute()
+        m.sdiff(self.assoclist_mac_set, self.active_mac_set)
+        m.sdiff(self.active_mac_set, self.assoclist_mac_set)
+        results = m.execute()
+
+
+        joined_macs = results[0]
+        left_macs = results[1]
+        print 'TYPE: %s' % type(joined_macs)
+        for mac in joined_macs:
+            print 'Joining %s' % mac
+            self.join(mac)
+        for mac in left_macs:
+            print 'Leaving %s' % mac
+            self.left(mac)
+        return (joined_macs, left_macs)
 
     def join(self, mac, interval=60*60):
         mac = mac.upper()
@@ -274,9 +296,9 @@ def agent():
     return json.dumps(DATA.agent())
 
 
-@get('/MAC/%s' % MAC_PATH)
-def join(mac):
-    DATA.join(mac)
+#@get('/MAC/%s' % MAC_PATH)
+#def join(mac):
+#    DATA.join(mac)
 
 
 @get('/MAC')
@@ -297,9 +319,9 @@ def excluded():
     return json.dumps(DATA.excluded())
 
 
-@delete('/MAC/%s' % MAC_PATH)
-def left(mac):
-    DATA.left(mac)
+# @delete('/MAC/%s' % MAC_PATH)
+# def left(mac):
+#     DATA.left(mac)
 
 
 @delete('/MAC/purge/%s' % MAC_PATH)
@@ -317,6 +339,7 @@ def macs(start, end):
 def update_excluded():
     print 'Refreshing update excluded: %s' % DATA.update_excluded()
 
+
 @SCHED.interval_schedule(minutes=1, coalesce=True)
 def update_leases():
     content = file(LEASES_FILENAME).read()
@@ -328,29 +351,46 @@ def update_leases():
         DATA.add_ip(mac, ip)
         DATA.add_hostname(mac, hostname)
 
+
+@SCHED.interval_schedule(minutes=1, coalesce=True)
+def update_macs():
+    content = file(ASSOCLIST_FILENAME).read()
+    regexp = 'assoclist (%s)' % (MAC_REGEXP)
+    results = re.findall(regexp, content)
+    joined, left = DATA.bulk(results)
+    print 'Updated macs (joined, left) (%s,%s)' % (joined, left)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Capture wifi data')
     parser.add_argument(
-        '--leases',
+        '-leases',
         dest='leases',
         default='/home/router/dnsmasq.leases')
+    parser.add_argument(
+        '-assoclist',
+        dest='assoclist',
+        default='/home/router/assoclist')
     args = parser.parse_args()
 
     if not os.path.isfile(args.leases):
         print 'Not a file: %s' % args.leases
         exit(1)
 
-    global DATA, OPEN_IMAGE, CLOSE_IMAGE, LEASES_FILENAME
+    global DATA, OPEN_IMAGE, CLOSE_IMAGE, LEASES_FILENAME, ASSOCLIST_FILENAME
+    ASSOCLIST_FILENAME = args.assoclist
     LEASES_FILENAME = args.leases
     OPEN_IMAGE = get_file_content('xcj_open_badge.gif')
     CLOSE_IMAGE = get_file_content('xcj_closed_badge.gif')
 
     DATA = WifiData(client())
-    SCHED.start()
-    SCHED.print_jobs()
 
+    update_macs()
     update_leases()
     update_excluded()
+
+    SCHED.start()
+    SCHED.print_jobs()
 
     print 'Starting API server'
     run(host='0.0.0.0', reloader=True, port=9000, debug=True)
