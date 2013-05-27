@@ -1,15 +1,50 @@
 #!/usr/bin/env python
-import os
-import time
-import re
-import argparse
-
-from bottle import route, run, request, post, get, response, delete
 from apscheduler.scheduler import Scheduler
+from bottle import route, run, request, post, get, response, delete
 
+import argparse
 import datetime
 import json
+import logging
+import os
+import re
 import redis
+import time
+
+SUBDIR = 'logs'
+
+
+def getLogger(filename):
+    name = os.path.basename(filename).split('.')[0]
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    subdir = os.path.join(SUBDIR, str(os.getpid()))
+    try:
+        os.makedirs(subdir)
+    except OSError:
+        pass
+    # create file handler which logs even debug messages
+    logfilename = os.path.join(subdir, '%s.log' % name)
+    #logfilename = ''.join([name, '.log'])
+    #logger.debug('Log in %s' % logfilename)
+    fh = logging.FileHandler(logfilename)
+    fh.setLevel(logging.DEBUG)
+    # create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+
+    formatter = logging.Formatter(
+        '%(asctime)s %(process)d %(name)s %(levelname)s %(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    return logger
+
+logger = getLogger(__file__)
+
 
 SEP = '|'
 SYSTEM_NAME = 'wifi'
@@ -26,10 +61,10 @@ def prefix(*arg):
 
 
 def client(config=None):
-    #print dir(redis)
+    #logger.debug(dir(redis))
     if config and 'redis' in config:
         redis_config = config['redis']
-        print 'Using alternate Redis config %s' % (redis_config)
+        logger.debug('Using alternate Redis config %s' % (redis_config))
         return redis.Redis(
             host=redis_config['host'],
             port=int(redis_config['port']))
@@ -125,12 +160,11 @@ class WifiData():
 
         joined_macs = results[0]
         left_macs = results[1]
-        print 'TYPE: %s' % type(joined_macs)
         for mac in joined_macs:
-            print 'Joining %s' % mac
+            logger.debug('Joining %s' % mac)
             self.join(mac)
         for mac in left_macs:
-            print 'Leaving %s' % mac
+            logger.debug('Leaving %s' % mac)
             self.left(mac)
         return (joined_macs, left_macs)
 
@@ -337,7 +371,7 @@ def macs(start, end):
 
 @SCHED.interval_schedule(minutes=1, coalesce=True)
 def update_excluded():
-    print 'Refreshing update excluded: %s' % DATA.update_excluded()
+    logger.debug('Refreshing update excluded: %s' % DATA.update_excluded())
 
 
 @SCHED.interval_schedule(minutes=1, coalesce=True)
@@ -345,7 +379,7 @@ def update_leases():
     content = file(LEASES_FILENAME).read()
     regexp = '(%s) (%s) (%s)' % (MAC_REGEXP, IP_REGEXP, HOSTNAME_REGEXP)
     results = re.findall(regexp, content)
-    print 'Updating leases: %s' % results
+    logger.debug('Updating leases: %s' % results)
     for (mac, ip, hostname) in results:
         mac = mac.upper()
         DATA.add_ip(mac, ip)
@@ -358,7 +392,7 @@ def update_macs():
     regexp = 'assoclist (%s)' % (MAC_REGEXP)
     results = re.findall(regexp, content)
     joined, left = DATA.bulk(results)
-    print 'Updated macs (joined, left) (%s,%s)' % (joined, left)
+    logger.debug('Updated macs (joined, left) (%s,%s)' % (joined, left))
 
 
 if __name__ == '__main__':
@@ -374,7 +408,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not os.path.isfile(args.leases):
-        print 'Not a file: %s' % args.leases
+        logger.debug('Not a file: %s' % args.leases)
         exit(1)
 
     global DATA, OPEN_IMAGE, CLOSE_IMAGE, LEASES_FILENAME, ASSOCLIST_FILENAME
@@ -392,5 +426,5 @@ if __name__ == '__main__':
     SCHED.start()
     SCHED.print_jobs()
 
-    print 'Starting API server'
+    logger.info('Starting API server')
     run(host='0.0.0.0', reloader=True, port=9000, debug=True)
