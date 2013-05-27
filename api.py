@@ -157,14 +157,13 @@ class WifiData():
         m.sdiff(self.active_mac_set, self.assoclist_mac_set)
         results = m.execute()
 
-
         joined_macs = results[0]
         left_macs = results[1]
         for mac in joined_macs:
-            logger.debug('Joining %s' % mac)
+            logger.info('Joining %s' % mac)
             self.join(mac)
         for mac in left_macs:
-            logger.debug('Leaving %s' % mac)
+            logger.info('Leaving %s' % mac)
             self.left(mac)
         return (joined_macs, left_macs)
 
@@ -371,7 +370,7 @@ def macs(start, end):
 
 @SCHED.interval_schedule(minutes=1, coalesce=True)
 def update_excluded():
-    logger.debug('Refreshing update excluded: %s' % DATA.update_excluded())
+    logger.info('Refreshing update excluded: %s' % DATA.update_excluded())
 
 
 @SCHED.interval_schedule(minutes=1, coalesce=True)
