@@ -42,3 +42,7 @@ Restart cron:
 stopservice cron && startservice cron
 ```
 
+
+# TODO
+
+hincrby '%02d%02d' % (d.weekday(), d.hour)
